@@ -6,7 +6,7 @@ from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 from plyer import vibrator
 
-UNIT = 0.1
+UNIT = 0.2
 DIT = UNIT * 1
 DAH = UNIT * 3
 INTRA_SPACE = UNIT * 1
@@ -26,17 +26,17 @@ class Sixer:
         self.buffer = []
 
     def buffer_0(self) -> None:
-        # print("< 0")
         self.buffer.append("0")
 
     def buffer_1(self) -> None:
-        # print("< 1")
         self.buffer.append("1")
 
     def get_move_pattern(self, move: chess.Move) -> str:
         sb = []
         to_square = move.to_square
-        capture_prev = move.to_square == self.board.peek().to_square
+        capture_prev = (
+            self.board.move_stack and move.to_square == self.board.peek().to_square
+        )
         if capture_prev:
             sb.append("00")
         else:
@@ -65,20 +65,24 @@ class Sixer:
                 sb.append(higher_inp)
         return " ".join(sb)
 
-    def vibrate(self, pattern: str = "0") -> None:
+    async def vibrate(self, pattern: str = "0") -> None:
+        # import time
+
         vibrate_pattern = []
         for i, c in enumerate(pattern):
-            # print(c)
             if c == " ":
                 continue
-            if i == 0:
-                pause = 0
-            elif pattern[i - 1] == " ":
-                pause = INTER_SPACE
-            else:
-                pause = INTRA_SPACE
-            vibrate_pattern.append(pause)
+            vibrate_pattern.append(
+                0 if i == 0 else INTER_SPACE if pattern[i - 1] == " " else INTRA_SPACE
+            )
             vibrate_pattern.append(DIT if c == "0" else DAH)
+        # for pause, vibrate in zip(vibrate_pattern[::2], vibrate_pattern[1::2]):
+        #     await trio.sleep(pause)
+        #     t0 = time.time()
+        #     i = 0
+        #     while time.time() - t0 < vibrate:
+        #         print(f"Brr {i}")
+        #         i += 1
         vibrator.pattern(vibrate_pattern)
 
     def get_best_move(self) -> chess.Move:
@@ -99,7 +103,7 @@ class Sixer:
         )
         assert legal_moves, "No moves with to square"
         if len(legal_moves) > 1:
-            self.vibrate()
+            await self.vibrate()
             while len(self.buffer) < 3:
                 await trio.sleep(0.1)
             piece_inp = "".join(self.buffer[:3])
@@ -113,7 +117,7 @@ class Sixer:
             assert legal_moves, "No moves with piece"
             if len(legal_moves) > 1:
                 assert len(legal_moves) == 2, "More than two duplicate pieces"
-                self.vibrate()
+                await self.vibrate()
                 while len(self.buffer) < 1:
                     await trio.sleep(0.1)
                 higher_inp = "".join(self.buffer[:1])
@@ -128,12 +132,11 @@ class Sixer:
             await trio.sleep(0.1)
         self.side = bool(int("".join(self.buffer[:1])))
         self.buffer_reset()
-        self.vibrate()
+        await self.vibrate()
         while not self.board.is_game_over():
-            # print(self.board)
             if self.board.turn == self.side:
                 move = self.get_best_move()
-                self.vibrate(self.get_move_pattern(move))
+                await self.vibrate(self.get_move_pattern(move))
             else:
                 move = await self.get_opp_move()
             self.board.push(move)
