@@ -63,6 +63,9 @@ class Sixer:
                 )
                 higher_inp = self.input_higher(higher, self.side == chess.BLACK)
                 sb.append(higher_inp)
+        if move.promotion is not None:
+            promotion_inp = self.input_piece(move.promotion)
+            sb.append(promotion_inp)
         return " ".join(sb)
 
     async def vibrate(self, pattern: str = "0") -> None:
